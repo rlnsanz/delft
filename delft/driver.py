@@ -128,13 +128,12 @@ def main():
         load_FABERT()
     elif options.dataset == "robert":
         load_ROBERT()
-    elif options.dataset =="volkert":
+    elif options.dataset == "volkert":
         load_VOLKERT()
 
-    tpot = TPOT(generations=0, verbosity=2, population_size=12)
+    tpot = TPOT(generations=5, verbosity=2, population_size=24, mutation_rate=0.1, crossover_rate=0.85)
     tpot.fit(X_train, y_train)
     print(tpot.score(X_test, y_test))
-    #tpot.export('tpot_mnist_pipeline.py')
     return 0
 
 if __name__ == "__main__":

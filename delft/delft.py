@@ -101,9 +101,6 @@ class Autoencoder(object):
     def set_model(self, model):
         self.model = model
 
-    def set_encoder(self, encoder):
-        self.encoder = encoder
-
     def set_dataframe(self, input_df):
         self.dataframe = input_df
 
@@ -130,6 +127,50 @@ class Autoencoder(object):
 
     def get_reconstruction(self, input_df):
         return self.model.predict(input_df.values)
+
+    def start_encoder(self, train_df, validate_df, excess_columns):
+        try:
+            self.train_df = train_df
+            self.validate_df = validate_df
+            nbr_columns = train_df.shape[1] - excess_columns
+            self.nbr_columns = nbr_columns
+            nbr_drop_columns = int(nbr_columns*self.dropout_rate)
+
+            if self.compression_factor == 0:
+                # Behavior undefined. Do not change feature space.
+                self.compression_factor = 1
+
+            encoding_dim = ceil(nbr_columns / self.compression_factor)
+            self.encoding_dim = encoding_dim
+            _input = Input(shape=(nbr_columns,))
+            self.input = _input
+
+            code_layer = Dense(encoding_dim, activation=self.encoder_activation,
+                               activity_regularizer=self.activity_regularizer)(_input)
+            self.code_layer = code_layer
+
+        except Exception as e:
+            print(e)
+
+    def stack_encoder(self, nbr_columns, code_layer, _input):
+        try:
+            self.input = _input
+            self.nbr_columns = nbr_columns
+            nbr_drop_columns = int(nbr_columns * self.dropout_rate)
+
+            if self.compression_factor == 0:
+                # Behavior undefined. Do not change feature space.
+                self.compression_factor = 1
+
+            encoding_dim = ceil(nbr_columns / self.compression_factor)
+            self.encoding_dim = encoding_dim
+            code_layer = Dense(encoding_dim, activation=self.encoder_activation,
+                               activity_regularizer=self.activity_regularizer)(code_layer)
+            self.code_layer = code_layer
+
+        except Exception as e:
+            print(e)
+
 
     def train(self, train_df, validate_df):
         """
@@ -190,6 +231,7 @@ class TPOT(object):
     """TPOT automatically creates and optimizes machine learning pipelines using genetic programming."""
 
     update_checked = False
+    encoder_stack = []
 
     def __init__(self, population_size=100, generations=100,
                  mutation_rate=0.9, crossover_rate=0.05,
@@ -370,7 +412,7 @@ class TPOT(object):
         self._toolbox.register('compile', gp.compile, pset=self._pset)
         self._toolbox.register('select', self._combined_selection_operator)
         self._toolbox.register('mate', gp.cxOnePoint)
-        self._toolbox.register('expr_mut', self._gen_grow_safe, min_=0, max_=3)
+        self._toolbox.register('expr_mut', self._gen_grow_safe, min_=1, max_=1)
         self._toolbox.register('mutate', self._random_mutation_operator)
 
         self.hof = None
@@ -665,6 +707,7 @@ class TPOT(object):
             Also adds the classifiers's predictions as a 'SyntheticFeature' column.
 
         """
+        input_df = self._compile_autoencoder()
 
         min_weight = min(0.5, max(0., min_weight))
 
@@ -688,6 +731,7 @@ class TPOT(object):
             Also adds the classifiers's predictions as a 'SyntheticFeature' column.
 
         """
+        input_df = self._compile_autoencoder()
 
         min_weight = min(0.5, max(0., min_weight))
 
@@ -711,6 +755,9 @@ class TPOT(object):
             Also adds the classifiers's predictions as a 'SyntheticFeature' column.
 
         """
+
+        input_df = self._compile_autoencoder()
+
         learning_rate = min(1., max(0.0001, learning_rate))
 
         return self._train_model_and_predict(input_df, AdaBoostClassifier,
@@ -735,6 +782,7 @@ class TPOT(object):
             Also adds the classifiers's predictions as a 'SyntheticFeature' column.
 
         """
+        input_df = self._compile_autoencoder()
 
         return self._train_model_and_predict(input_df, BernoulliNB, alpha=alpha,
             binarize=binarize, fit_prior=True)
@@ -762,6 +810,8 @@ class TPOT(object):
 
         """
         # Select criterion string from list of valid parameters
+        input_df = self._compile_autoencoder()
+
         criterion_values = ['gini', 'entropy']
         criterion_selection = criterion_values[criterion % len(criterion_values)]
 
@@ -787,6 +837,7 @@ class TPOT(object):
             Also adds the classifiers's predictions as a 'SyntheticFeature' column.
 
         """
+        input_df = self._compile_autoencoder()
         return self._train_model_and_predict(input_df, GaussianNB)
 
     def _multinomial_nb(self, input_df, alpha):
@@ -806,6 +857,7 @@ class TPOT(object):
             Also adds the classifiers's predictions as a 'SyntheticFeature' column.
 
         """
+        input_df = self._compile_autoencoder()
         return self._train_model_and_predict(input_df, MultinomialNB, alpha=alpha, fit_prior=True)
 
     def _linear_svc(self, input_df, C, penalty, dual):
@@ -829,6 +881,7 @@ class TPOT(object):
             Also adds the classifiers's predictions as a 'SyntheticFeature' column.
 
         """
+        input_df = self._compile_autoencoder()
         penalty_values = ['l1', 'l2']
         penalty_selection = penalty_values[penalty % len(penalty_values)]
 
@@ -859,6 +912,7 @@ class TPOT(object):
             Also adds the classifiers's predictions as a 'SyntheticFeature' column.
 
         """
+        input_df = self._compile_autoencoder()
         loss_values = ['hinge', 'squared_hinge']
         loss_selection = loss_values[loss % len(loss_values)]
 
@@ -888,6 +942,7 @@ class TPOT(object):
             Also adds the classifiers's predictions as a 'SyntheticFeature' column.
 
         """
+        input_df = self._compile_autoencoder()
         C = min(50., max(0.0001, C))
 
         penalty_values = ['l1', 'l2']
@@ -918,6 +973,7 @@ class TPOT(object):
             Also adds the classifiers's predictions as a 'SyntheticFeature' column.
 
         """
+        input_df = self._compile_autoencoder()
         training_set_size = len(input_df.loc[input_df['group'] == 'training'])
         n_neighbors = max(min(training_set_size - 1, n_neighbors), 2)
 
@@ -948,6 +1004,7 @@ class TPOT(object):
             Also adds the classifiers's predictions as a 'SyntheticFeature' column.
 
         """
+        input_df = self._compile_autoencoder()
         learning_rate = min(1., max(learning_rate, 0.0001))
         max_features = min(1., max(0., learning_rate))
         min_weight = min(0.5, max(0., min_weight))
@@ -1026,29 +1083,81 @@ class TPOT(object):
         train_df = input_df.loc[input_df['group'] == 'training']
         test_df = input_df.loc[input_df['group'] == 'testing']
 
+        autoencoder.start_encoder(train_df, test_df, len(self.non_feature_columns))
+        self.encoder_stack = []
+        self.encoder_stack.append(autoencoder)
+        return autoencoder.encoding_dim, autoencoder.code_layer, autoencoder.input
+
+    def _hidden_autoencoder(self, input_df, compression_factor, encoder_acivation,
+                     decoder_activation, optimizer, activity_regularizer,
+                     activity_regularizer_param1, activity_regularizer_param2):
+
+        if type(input_df) == type(pd.DataFrame):
+            return self._autoencoder(input_df, compression_factor, encoder_acivation,
+                                     decoder_activation, optimizer, activity_regularizer,
+                                     activity_regularizer_param1, activity_regularizer_param2)
+
+        nbr_columns, code_layer, _input = input_df
+
+        if activity_regularizer == 1:
+            activity_regularizer = regularizers.activity_l1(activity_regularizer_param1)
+        elif activity_regularizer == 2:
+            activity_regularizer = regularizers.activity_l2(activity_regularizer_param1)
+        elif activity_regularizer == 3:
+            activity_regularizer = regularizers.activity_l1l2(activity_regularizer_param1, activity_regularizer_param2)
+        else:
+            activity_regularizer = None
+
+        autoencoder = Autoencoder(compression_factor=compression_factor, encoder_activation=encoder_acivation,
+                                  decoder_activation=decoder_activation, optimizer=optimizer,
+                                  activity_regularizer=activity_regularizer, dropout_rate=0.0)
+
+        autoencoder.stack_encoder(nbr_columns, code_layer, _input)
+
+        self.encoder_stack.append(autoencoder)
+        return autoencoder.encoding_dim, autoencoder.code_layer, _input
+
+    def _compile_autoencoder(self):
+        optimizer = self.encoder_stack[0].optimizer
+        train_df = self.encoder_stack[0].train_df
+        validate_df = self.encoder_stack[0].validate_df
+        nb_epoch = self.encoder_stack[0].nb_epoch * len(self.encoder_stack)
+
+        self.encoder_stack.reverse()
+        encoded_layer = self.encoder_stack[0].code_layer
+
+
         train_data = train_df.drop(self.non_feature_columns, axis=1).astype(np.float64)
-        test_data = test_df.drop(self.non_feature_columns, axis=1).astype(np.float64)
+        validate_data = validate_df.drop(self.non_feature_columns, axis=1).astype(np.float64)
 
-        autoencoder.train(train_data, test_data)
+        decoder = None
+        _input = None
+        for autoencoder in self.encoder_stack:
+            _input = autoencoder.input
+            if decoder is None:
+                decoder = Dense(autoencoder.nbr_columns, activation=autoencoder.decoder_activation)(encoded_layer)
+            else:
+                decoder = Dense(autoencoder.nbr_columns, activation=autoencoder.decoder_activation)(decoder)
 
-        code_train_df = pd.DataFrame(data=autoencoder.get_code(train_data))
-        code_test_df = pd.DataFrame(data=autoencoder.get_code(test_data))
+        model = Model(input=_input, output=decoder)
+        encoder = Model(input=_input, output=encoded_layer)
+
+        model.compile(optimizer=optimizer, loss='binary_crossentropy')
+
+        model.fit(train_data.values, train_data.values, nb_epoch=nb_epoch, batch_size=256, verbose=1,
+                  shuffle=True, validation_data=(validate_data.values, validate_data.values))
+
+        code_train_df = pd.DataFrame(data=encoder.predict(train_data.values))
+        code_test_df = pd.DataFrame(data=encoder.predict(validate_data.values))
 
         code_train_df[self.non_feature_columns] = train_df[self.non_feature_columns]
-        code_test_df[self.non_feature_columns] = test_df[self.non_feature_columns]
+        code_test_df[self.non_feature_columns] = validate_df[self.non_feature_columns]
 
         code_df = code_train_df.append(code_test_df)
         code_df = code_df.reset_index(drop=True)
 
         return code_df
 
-    def _hidden_autoencoder(self, input_df, compression_factor, encoder_acivation,
-                     decoder_activation, optimizer, activity_regularizer,
-                     activity_regularizer_param1, activity_regularizer_param2):
-
-        return self._autoencoder(input_df, compression_factor, encoder_acivation,
-                                 decoder_activation, optimizer, activity_regularizer,
-                                 activity_regularizer_param1, activity_regularizer_param2)
 
     @staticmethod
     def _combine_dfs(input_df1, input_df2):
@@ -1883,7 +1992,7 @@ class TPOT(object):
             or when it is randomly determined that a a node should be a terminal.
             """
             # Plus 10 height to enable deep pipelines
-            return type_ not in [Classified_DF, Encoded_DF, Output_DF, Scaled_DF] or depth == height
+            return type_ not in [Encoded_DF, Output_DF, Scaled_DF] or depth == height
 
         return self._generate(pset, min_, max_, condition, type_)
 
