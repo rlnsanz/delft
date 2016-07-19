@@ -1,6 +1,6 @@
 import numpy as np
 
-from dpot import TPOT
+from delft import TPOT
 
 from optparse import OptionParser
 
@@ -131,7 +131,7 @@ def main():
     elif options.dataset =="volkert":
         load_VOLKERT()
 
-    tpot = TPOT(generations=0, verbosity=2, population_size=120)
+    tpot = TPOT(generations=0, verbosity=2, population_size=12)
     tpot.fit(X_train, y_train)
     print(tpot.score(X_test, y_test))
     #tpot.export('tpot_mnist_pipeline.py')
