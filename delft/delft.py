@@ -234,7 +234,7 @@ class TPOT(object):
     encoder_stack = []
 
     def __init__(self, population_size=100, generations=100,
-                 mutation_rate=0.9, crossover_rate=0.05,
+                 mutation_rate=0, crossover_rate=0.95,
                  random_state=0, verbosity=0, scoring_function=None,
                  disable_update_check=False):
         """Sets up the genetic programming algorithm for pipeline optimization.
@@ -406,13 +406,13 @@ class TPOT(object):
         creator.create('Individual', gp.PrimitiveTree, fitness=creator.FitnessMulti)
 
         self._toolbox = base.Toolbox()
-        self._toolbox.register('expr', self._gen_grow_safe, pset=self._pset, min_=3, max_=500)
+        self._toolbox.register('expr', self._gen_grow_safe, pset=self._pset, min_=12, max_=500)
         self._toolbox.register('individual', tools.initIterate, creator.Individual, self._toolbox.expr)
         self._toolbox.register('population', tools.initRepeat, list, self._toolbox.individual)
         self._toolbox.register('compile', gp.compile, pset=self._pset)
         self._toolbox.register('select', self._combined_selection_operator)
         self._toolbox.register('mate', gp.cxOnePoint)
-        self._toolbox.register('expr_mut', self._gen_grow_safe, min_=1, max_=1)
+        self._toolbox.register('expr_mut', self._gen_grow_safe, min_=3, max_=12)
         self._toolbox.register('mutate', self._random_mutation_operator)
 
         self.hof = None
@@ -1145,7 +1145,7 @@ class TPOT(object):
         model.compile(optimizer=optimizer, loss='binary_crossentropy')
 
         model.fit(train_data.values, train_data.values, nb_epoch=nb_epoch, batch_size=256, verbose=1,
-                  shuffle=True, validation_data=(validate_data.values, validate_data.values))
+                  shuffle=True)
 
         code_train_df = pd.DataFrame(data=encoder.predict(train_data.values))
         code_test_df = pd.DataFrame(data=encoder.predict(validate_data.values))
