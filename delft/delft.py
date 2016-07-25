@@ -234,7 +234,7 @@ class TPOT(object):
     encoder_stack = []
 
     def __init__(self, population_size=100, generations=100,
-                 mutation_rate=0, crossover_rate=0.95,
+                 mutation_rate=0.9, crossover_rate=0.05,
                  random_state=0, verbosity=0, scoring_function=None,
                  disable_update_check=False):
         """Sets up the genetic programming algorithm for pipeline optimization.
@@ -320,18 +320,19 @@ class TPOT(object):
                                                     Activity_Regularization_Parameter], Encoded_DF)
 
         # Machine learning model operators
-        self._pset.addPrimitive(self._decision_tree, [Encoded_DF, float], Output_DF)
-        self._pset.addPrimitive(self._random_forest, [Encoded_DF, float], Output_DF)
-        self._pset.addPrimitive(self._ada_boost, [Encoded_DF, float], Output_DF)
-        self._pset.addPrimitive(self._logistic_regression, [Encoded_DF, float, int, Bool], Output_DF)
-        self._pset.addPrimitive(self._knnc, [Encoded_DF, int, int], Output_DF)
-        self._pset.addPrimitive(self._gradient_boosting, [Encoded_DF, float, float, float], Output_DF)
-        self._pset.addPrimitive(self._bernoulli_nb, [Encoded_DF, float, float], Output_DF)
-        self._pset.addPrimitive(self._extra_trees, [Encoded_DF, int, float, float], Output_DF)
-        self._pset.addPrimitive(self._gaussian_nb, [Encoded_DF], Output_DF)
-        self._pset.addPrimitive(self._multinomial_nb, [Encoded_DF, float], Output_DF)
-        self._pset.addPrimitive(self._linear_svc, [Encoded_DF, float, int, Bool], Output_DF)
-        self._pset.addPrimitive(self._passive_aggressive, [Encoded_DF, float, int], Output_DF)
+        # self._pset.addPrimitive(self._decision_tree, [Encoded_DF, float], Output_DF)
+        # self._pset.addPrimitive(self._random_forest, [Encoded_DF, float], Output_DF)
+        # self._pset.addPrimitive(self._ada_boost, [Encoded_DF, float], Output_DF)
+        # self._pset.addPrimitive(self._logistic_regression, [Encoded_DF, float, int, Bool], Output_DF)
+        # self._pset.addPrimitive(self._knnc, [Encoded_DF, int, int], Output_DF)
+        # self._pset.addPrimitive(self._gradient_boosting, [Encoded_DF, float, float, float], Output_DF)
+        # self._pset.addPrimitive(self._bernoulli_nb, [Encoded_DF, float, float], Output_DF)
+        # self._pset.addPrimitive(self._extra_trees, [Encoded_DF, int, float, float], Output_DF)
+        # self._pset.addPrimitive(self._gaussian_nb, [Encoded_DF], Output_DF)
+        # self._pset.addPrimitive(self._multinomial_nb, [Encoded_DF, float], Output_DF)
+        # self._pset.addPrimitive(self._linear_svc, [Encoded_DF, float, int, Bool], Output_DF)
+        # self._pset.addPrimitive(self._passive_aggressive, [Encoded_DF, float, int], Output_DF)
+        self._pset.addPrimitive(self._compile_autoencoder, [Encoded_DF], Output_DF)
 
         # Feature preprocessing operators
         #self._pset.addPrimitive(self._combine_dfs, [pd.DataFrame, pd.DataFrame], pd.DataFrame)
@@ -402,6 +403,10 @@ class TPOT(object):
             self._pset.addTerminal(val, Activity_Regularization_Parameter)
             #self._pset.addTerminal(val, Dropout_Rate)
 
+        # Dummies for DEAP mutation, never produce a better pipeline
+        self._pset.addTerminal([0,0], Classified_DF )
+        self._pset.addTerminal([0,0], Scaled_DF)
+
         creator.create('FitnessMulti', base.Fitness, weights=(-1.0, 1.0))
         creator.create('Individual', gp.PrimitiveTree, fitness=creator.FitnessMulti)
 
@@ -421,6 +426,9 @@ class TPOT(object):
             self.scoring_function = self._balanced_accuracy
         else:
             self.scoring_function = scoring_function
+
+    def set_training_classes_vectorized(self, classes_vec):
+        self._training_classes_vec = classes_vec
 
     def fit(self, features, classes):
         """Fits a machine learning pipeline that maximizes classification accuracy on the provided data
@@ -443,6 +451,7 @@ class TPOT(object):
 
         """
         try:
+
             # Store the training features and classes for later use
             self._training_features = features
             self._training_classes = classes
@@ -467,6 +476,8 @@ class TPOT(object):
                                                                  train_size=0.75,
                                                                  test_size=0.25)
 
+            self._training_classes_vec_train = self._training_classes_vec[training_indices]
+            self._training_classes_vec_test = self._training_classes_vec[testing_indices]
             training_testing_data.loc[training_indices, 'group'] = 'training'
             training_testing_data.loc[testing_indices, 'group'] = 'testing'
 
@@ -1117,7 +1128,7 @@ class TPOT(object):
         self.encoder_stack.append(autoencoder)
         return autoencoder.encoding_dim, autoencoder.code_layer, _input
 
-    def _compile_autoencoder(self):
+    def _compile_autoencoder(self, input_df):
         optimizer = self.encoder_stack[0].optimizer
         train_df = self.encoder_stack[0].train_df
         validate_df = self.encoder_stack[0].validate_df
@@ -1132,21 +1143,35 @@ class TPOT(object):
 
         decoder = None
         _input = None
+        target_layer = None
+        hashable = []
         for autoencoder in self.encoder_stack:
             _input = autoencoder.input
             if decoder is None:
                 decoder = Dense(autoencoder.nbr_columns, activation=autoencoder.decoder_activation)(encoded_layer)
+                target_layer = Dense(len(self._training_classes_vec_train[0]), activation=autoencoder.decoder_activation)(encoded_layer)
             else:
                 decoder = Dense(autoencoder.nbr_columns, activation=autoencoder.decoder_activation)(decoder)
+            hashable.append(autoencoder.decoder_activation)
+
+
 
         model = Model(input=_input, output=decoder)
         encoder = Model(input=_input, output=encoded_layer)
+        classifier = Model(input=_input, output=target_layer)
 
+        # Unsupervised pretraining
         model.compile(optimizer=optimizer, loss='binary_crossentropy')
 
         model.fit(train_data.values, train_data.values, nb_epoch=nb_epoch, batch_size=256, verbose=1,
-                  shuffle=True)
+                  shuffle=True, validation_data=(validate_data.values, validate_data.values))
 
+        # Supervised training
+        classifier.compile(optimizer=optimizer, loss='binary_crossentropy')
+        classifier.fit(train_data.values, np.array(self._training_classes_vec_train), nb_epoch=nb_epoch*5, batch_size=256*2,
+                       verbose=1, shuffle=True)
+
+        """
         code_train_df = pd.DataFrame(data=encoder.predict(train_data.values))
         code_test_df = pd.DataFrame(data=encoder.predict(validate_data.values))
 
@@ -1157,7 +1182,35 @@ class TPOT(object):
         code_df = code_df.reset_index(drop=True)
 
         return code_df
+        """
+        input_df = train_df.append(validate_df)
+        input_df = input_df.reset_index(drop=True)
+        # If there are no features left (i.e., only 'class', 'group', and 'guess' remain in the DF), then there is nothing to do
+        if len(input_df.columns) == 3:
+            return input_df
 
+        input_df = input_df.copy()
+
+        # training_features = input_df.loc[input_df['group'] == 'training'].drop(self.non_feature_columns, axis=1).values
+        # training_classes = input_df.loc[input_df['group'] == 'training', 'class'].values
+
+        all_features = input_df.drop(self.non_feature_columns, axis=1).values
+        predictions = classifier.predict(all_features)
+        guess = np.argmax(predictions, 1)
+        input_df.loc[:, 'guess'] = guess
+
+        # Also store the guesses as a synthetic feature
+        # sf_hash = '-'.join(sorted(input_df.columns.values))
+        sf_hash = '-'.join([str(x) for x in input_df.columns.values])
+        # Use the classifier object's class name in the synthetic feature
+        sf_hash += '{}'.format(classifier.__class__)
+        hashable.append(optimizer)
+        hashable.append(str(nb_epoch))
+        sf_hash += '-'.join(hashable)
+        sf_identifier = 'SyntheticFeature-{}'.format(hashlib.sha224(sf_hash.encode('UTF-8')).hexdigest())
+        input_df.loc[:, sf_identifier] = input_df['guess'].values
+
+        return input_df
 
     @staticmethod
     def _combine_dfs(input_df1, input_df2):
