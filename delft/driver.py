@@ -189,7 +189,7 @@ def main():
     elif options.dataset == "volkert":
         load_VOLKERT()
 
-    tpot = TPOT(generations=5, population_size=10, verbosity=2, mutation_rate=0.9, crossover_rate=0.05)
+    tpot = TPOT(generations=5, population_size=5, verbosity=2, mutation_rate=0.9, crossover_rate=0.05)
     tpot.set_training_classes_vectorized(y_train_vec)
     tpot.fit(X_train, y_train)
     print(tpot.score(X_test, y_test))

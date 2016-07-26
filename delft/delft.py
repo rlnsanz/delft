@@ -283,6 +283,7 @@ class TPOT(object):
             update_check('tpot', __version__)
             TPOT.update_checked = True
 
+        self._training_testing_data = False
         self._optimized_pipeline = None
         self._training_features = None
         self._training_classes = None
@@ -453,6 +454,7 @@ class TPOT(object):
         try:
 
             # Store the training features and classes for later use
+            self._training_testing_data = False
             self._training_features = features
             self._training_classes = classes
 
@@ -638,6 +640,7 @@ class TPOT(object):
         testing_data['group'] = 'testing'
 
         training_testing_data = pd.concat([training_data, testing_data])
+        self._training_testing_data = True
 
         # Default guess: the most frequent class in the training data
         most_frequent_training_class = Counter(self._training_classes).most_common(1)[0][0]
@@ -1129,6 +1132,9 @@ class TPOT(object):
         return autoencoder.encoding_dim, autoencoder.code_layer, _input
 
     def _compile_autoencoder(self, input_df):
+        if self._training_testing_data:
+            # This runs when we are scoring the test set.
+            self._training_classes_vec_train = self._training_classes_vec
         optimizer = self.encoder_stack[0].optimizer
         train_df = self.encoder_stack[0].train_df
         validate_df = self.encoder_stack[0].validate_df
