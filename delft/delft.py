@@ -36,18 +36,7 @@ from keras import regularizers
 from keras.layers import Input, LSTM, RepeatVector, Dense
 from keras.models import Model
 
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, ExtraTreesClassifier, GradientBoostingClassifier
-from sklearn.linear_model import LogisticRegression, PassiveAggressiveClassifier
-from sklearn.svm import SVC, LinearSVC
-from sklearn.cluster import FeatureAgglomeration
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.feature_selection import VarianceThreshold, SelectKBest, SelectPercentile, RFE, SelectFwe, f_classif
 from sklearn.preprocessing import StandardScaler, RobustScaler, MaxAbsScaler, MinMaxScaler
-from sklearn.preprocessing import PolynomialFeatures, Binarizer
-from sklearn.decomposition import RandomizedPCA, FastICA
-from sklearn.kernel_approximation import RBFSampler, Nystroem
-from sklearn.naive_bayes import BernoulliNB, GaussianNB, MultinomialNB
 from sklearn.cross_validation import train_test_split
 
 import warnings
@@ -308,8 +297,7 @@ class TPOT(object):
         # Rename pipeline input to "input_df"
         self._pset.renameArguments(ARG0='input_df')
 
-        # Deep model initialization operators
-
+        # Neural Network operators
         self._pset.addPrimitive(self._autoencoder, [Scaled_DF, Compression_Factor, Activation,
                                                     Activation, Optimizer, Activity_Regularizer,
                                                     Activity_Regularization_Parameter,
@@ -320,42 +308,15 @@ class TPOT(object):
                                                     Activity_Regularization_Parameter,
                                                     Activity_Regularization_Parameter], Encoded_DF)
 
-        # Machine learning model operators
-        # self._pset.addPrimitive(self._decision_tree, [Encoded_DF, float], Output_DF)
-        # self._pset.addPrimitive(self._random_forest, [Encoded_DF, float], Output_DF)
-        # self._pset.addPrimitive(self._ada_boost, [Encoded_DF, float], Output_DF)
-        # self._pset.addPrimitive(self._logistic_regression, [Encoded_DF, float, int, Bool], Output_DF)
-        # self._pset.addPrimitive(self._knnc, [Encoded_DF, int, int], Output_DF)
-        # self._pset.addPrimitive(self._gradient_boosting, [Encoded_DF, float, float, float], Output_DF)
-        # self._pset.addPrimitive(self._bernoulli_nb, [Encoded_DF, float, float], Output_DF)
-        # self._pset.addPrimitive(self._extra_trees, [Encoded_DF, int, float, float], Output_DF)
-        # self._pset.addPrimitive(self._gaussian_nb, [Encoded_DF], Output_DF)
-        # self._pset.addPrimitive(self._multinomial_nb, [Encoded_DF, float], Output_DF)
-        # self._pset.addPrimitive(self._linear_svc, [Encoded_DF, float, int, Bool], Output_DF)
-        # self._pset.addPrimitive(self._passive_aggressive, [Encoded_DF, float, int], Output_DF)
         self._pset.addPrimitive(self._compile_autoencoder, [Encoded_DF], Output_DF)
 
         # Feature preprocessing operators
-        #self._pset.addPrimitive(self._combine_dfs, [pd.DataFrame, pd.DataFrame], pd.DataFrame)
-        #self._pset.addPrimitive(self._variance_threshold, [pd.DataFrame, float], pd.DataFrame)
         self._pset.addPrimitive(self._standard_scaler, [pd.DataFrame], Scaled_DF)
         self._pset.addPrimitive(self._robust_scaler, [pd.DataFrame], Scaled_DF)
         self._pset.addPrimitive(self._min_max_scaler, [pd.DataFrame], Scaled_DF)
         self._pset.addPrimitive(self._max_abs_scaler, [pd.DataFrame], Scaled_DF)
-        #self._pset.addPrimitive(self._binarizer, [pd.DataFrame, float], pd.DataFrame)
-        #self._pset.addPrimitive(self._polynomial_features, [pd.DataFrame], pd.DataFrame)
-        #self._pset.addPrimitive(self._pca, [pd.DataFrame, int], pd.DataFrame)
-        #self._pset.addPrimitive(self._rbf, [pd.DataFrame, float], pd.DataFrame)
-        #self._pset.addPrimitive(self._fast_ica, [pd.DataFrame, float], pd.DataFrame)
-        #self._pset.addPrimitive(self._feat_agg, [pd.DataFrame, int, int, int], pd.DataFrame)
-        #self._pset.addPrimitive(self._nystroem, [pd.DataFrame, int, float, int], pd.DataFrame)
-        #self._pset.addPrimitive(self._zero_count, [pd.DataFrame], pd.DataFrame)
 
-        # Feature selection operators
-        #self._pset.addPrimitive(self._select_kbest, [pd.DataFrame, int], pd.DataFrame)
-        #self._pset.addPrimitive(self._select_fwe, [pd.DataFrame, float], pd.DataFrame)
-        #self._pset.addPrimitive(self._select_percentile, [pd.DataFrame, int], pd.DataFrame)
-        #self._pset.addPrimitive(self._rfe, [pd.DataFrame, int, float], pd.DataFrame)
+        # Imputer operators
 
         # Terminals
         int_terminals = np.concatenate((np.arange(0, 51, 1),
@@ -374,7 +335,6 @@ class TPOT(object):
 
         for val in np.linspace(0.1, 10, 100):
             self._pset.addTerminal(val, Compression_Factor)
-
 
         self._pset.addTerminal(True, Bool)
         self._pset.addTerminal(False, Bool)
@@ -455,6 +415,7 @@ class TPOT(object):
 
             # Store the training features and classes for later use
             self._training_testing_data = False
+            # self._training_classes_vec = (np.arange(max(classes) + 1) == classes[:, None]).astype(np.float32)
             self._training_features = features
             self._training_classes = classes
 
@@ -704,382 +665,13 @@ class TPOT(object):
         with open(output_file_name, 'w') as output_file:
             output_file.write(pipeline_text)
 
-    def _decision_tree(self, input_df, min_weight):
-        """Fits a decision tree classifier
-
-        Parameters
-        ----------
-        input_df: pandas.DataFrame {n_samples, n_features+['class', 'group', 'guess']}
-            Input DataFrame for fitting the decision tree
-        min_weight_fraction_leaf: float
-            The minimum weighted fraction of the input samples required to be at a leaf node.
-
-        Returns
-        -------
-        input_df: pandas.DataFrame {n_samples, n_features+['guess', 'group', 'class', 'SyntheticFeature']}
-            Returns a modified input DataFrame with the guess column updated according to the classifier's predictions.
-            Also adds the classifiers's predictions as a 'SyntheticFeature' column.
-
-        """
-        input_df = self._compile_autoencoder()
-
-        min_weight = min(0.5, max(0., min_weight))
-
-        return self._train_model_and_predict(input_df, DecisionTreeClassifier,
-            min_weight_fraction_leaf=min_weight, random_state=42)
-
-    def _random_forest(self, input_df, min_weight):
-        """Fits a random forest classifier
-
-        Parameters
-        ----------
-        input_df: pandas.DataFrame {n_samples, n_features+['class', 'group', 'guess']}
-            Input DataFrame for fitting the random forest
-        min_weight_fraction_leaf: float
-            The minimum weighted fraction of the input samples required to be at a leaf node.
-
-        Returns
-        -------
-        input_df: pandas.DataFrame {n_samples, n_features+['guess', 'group', 'class', 'SyntheticFeature']}
-            Returns a modified input DataFrame with the guess column updated according to the classifier's predictions.
-            Also adds the classifiers's predictions as a 'SyntheticFeature' column.
-
-        """
-        input_df = self._compile_autoencoder()
-
-        min_weight = min(0.5, max(0., min_weight))
-
-        return self._train_model_and_predict(input_df, RandomForestClassifier,
-            min_weight_fraction_leaf=min_weight, n_estimators=500, random_state=42, n_jobs=-1)
-
-    def _ada_boost(self, input_df, learning_rate):
-        """Fits an AdaBoost classifier
-
-        Parameters
-        ----------
-        input_df: pandas.DataFrame {n_samples, n_features+['class', 'group', 'guess']}
-            Input DataFrame for fitting the classifier
-        learning_rate: float
-            Learning rate shrinks the contribution of each classifier by learning_rate.
-
-        Returns
-        -------
-        input_df: pandas.DataFrame {n_samples, n_features+['guess', 'group', 'class', 'SyntheticFeature']}
-            Returns a modified input DataFrame with the guess column updated according to the classifier's predictions.
-            Also adds the classifiers's predictions as a 'SyntheticFeature' column.
-
-        """
-
-        input_df = self._compile_autoencoder()
-
-        learning_rate = min(1., max(0.0001, learning_rate))
-
-        return self._train_model_and_predict(input_df, AdaBoostClassifier,
-            learning_rate=learning_rate, n_estimators=500, random_state=42)
-
-    def _bernoulli_nb(self, input_df, alpha, binarize):
-        """Fits a Bernoulli Naive Bayes classifier
-
-        Parameters
-        ----------
-        input_df: pandas.DataFrame {n_samples, n_features+['class', 'group', 'guess']}
-            Input DataFrame for fitting the classifier
-        alpha: float
-            Additive (Laplace/Lidstone) smoothing parameter (0 for no smoothing).
-        binarize: float
-            Threshold for binarizing (mapping to booleans) of sample features.
-
-        Returns
-        -------
-        input_df: pandas.DataFrame {n_samples, n_features+['guess', 'group', 'class', 'SyntheticFeature']}
-            Returns a modified input DataFrame with the guess column updated according to the classifier's predictions.
-            Also adds the classifiers's predictions as a 'SyntheticFeature' column.
-
-        """
-        input_df = self._compile_autoencoder()
-
-        return self._train_model_and_predict(input_df, BernoulliNB, alpha=alpha,
-            binarize=binarize, fit_prior=True)
-
-    def _extra_trees(self, input_df, criterion, max_features, min_weight):
-        """Fits an Extra Trees Classifier
-
-        Parameters
-        ----------
-        input_df: pandas.DataFrame {n_samples, n_features+['class', 'group', 'guess']}
-            Input DataFrame for fitting the classifier
-        criterion: int
-            Integer that is used to select from the list of valid criteria,
-            either 'gini', or 'entropy'
-        max_features: float
-            The number of features to consider when looking for the best split
-        min_weight_fraction_leaf: float
-            The minimum weighted fraction of the input samples required to be at a leaf node.
-
-        Returns
-        -------
-        input_df: pandas.DataFrame {n_samples, n_features+['guess', 'group', 'class', 'SyntheticFeature']}
-            Returns a modified input DataFrame with the guess column updated according to the classifier's predictions.
-            Also adds the classifiers's predictions as a 'SyntheticFeature' column.
-
-        """
-        # Select criterion string from list of valid parameters
-        input_df = self._compile_autoencoder()
-
-        criterion_values = ['gini', 'entropy']
-        criterion_selection = criterion_values[criterion % len(criterion_values)]
-
-        min_weight = min(0.5, max(0., min_weight))
-        max_features = min(1., max(0., max_features))
-
-        return self._train_model_and_predict(input_df, ExtraTreesClassifier,
-            criterion=criterion_selection, max_features=max_features, min_weight_fraction_leaf=min_weight,
-            n_estimators=500, random_state=42)
-
-    def _gaussian_nb(self, input_df):
-        """Fits a Gaussian Naive Bayes Classifier
-
-        Parameters
-        ----------
-        input_df: pandas.DataFrame {n_samples, n_features+['class', 'group', 'guess']}
-            Input DataFrame for fitting the classifier
-
-        Returns
-        -------
-        input_df: pandas.DataFrame {n_samples, n_features+['guess', 'group', 'class', 'SyntheticFeature']}
-            Returns a modified input DataFrame with the guess column updated according to the classifier's predictions.
-            Also adds the classifiers's predictions as a 'SyntheticFeature' column.
-
-        """
-        input_df = self._compile_autoencoder()
-        return self._train_model_and_predict(input_df, GaussianNB)
-
-    def _multinomial_nb(self, input_df, alpha):
-        """Fits a Naive Bayes classifier for multinomial models
-
-        Parameters
-        ----------
-        input_df: pandas.DataFrame {n_samples, n_features+['class', 'group', 'guess']}
-            Input DataFrame for fitting the classifier
-        alpha: float
-            Additive (Laplace/Lidstone) smoothing parameter (0 for no smoothing).
-
-        Returns
-        -------
-        input_df: pandas.DataFrame {n_samples, n_features+['guess', 'group', 'class', 'SyntheticFeature']}
-            Returns a modified input DataFrame with the guess column updated according to the classifier's predictions.
-            Also adds the classifiers's predictions as a 'SyntheticFeature' column.
-
-        """
-        input_df = self._compile_autoencoder()
-        return self._train_model_and_predict(input_df, MultinomialNB, alpha=alpha, fit_prior=True)
-
-    def _linear_svc(self, input_df, C, penalty, dual):
-        """Fits a Linear Support Vector Classifier
-
-        Parameters
-        ----------
-        input_df: pandas.DataFrame {n_samples, n_features+['class', 'group', 'guess']}
-            Input DataFrame for fitting the classifier
-        C: float
-            Penalty parameter C of the error term.
-        penalty: int
-            Integer used to specify the norm used in the penalization (l1 or l2)
-        dual: bool
-            Select the algorithm to either solve the dual or primal optimization problem.
-
-        Returns
-        -------
-        input_df: pandas.DataFrame {n_samples, n_features+['guess', 'group', 'class', 'SyntheticFeature']}
-            Returns a modified input DataFrame with the guess column updated according to the classifier's predictions.
-            Also adds the classifiers's predictions as a 'SyntheticFeature' column.
-
-        """
-        input_df = self._compile_autoencoder()
-        penalty_values = ['l1', 'l2']
-        penalty_selection = penalty_values[penalty % len(penalty_values)]
-
-        C = min(25., max(0.0001, C))
-
-        if penalty_selection == 'l1':
-            dual = False
-
-        return self._train_model_and_predict(input_df, LinearSVC, C=C,
-            penalty=penalty_selection, dual=dual, random_state=42)
-
-    def _passive_aggressive(self, input_df, C, loss):
-        """Fits a Linear Support Vector Classifier
-
-        Parameters
-        ----------
-        input_df: pandas.DataFrame {n_samples, n_features+['class', 'group', 'guess']}
-            Input DataFrame for fitting the classifier
-        C: float
-            Penalty parameter C of the error term.
-        loss: int
-            Integer used to determine the loss function (either 'hinge' or 'squared_hinge')
-
-        Returns
-        -------
-        input_df: pandas.DataFrame {n_samples, n_features+['guess', 'group', 'class', 'SyntheticFeature']}
-            Returns a modified input DataFrame with the guess column updated according to the classifier's predictions.
-            Also adds the classifiers's predictions as a 'SyntheticFeature' column.
-
-        """
-        input_df = self._compile_autoencoder()
-        loss_values = ['hinge', 'squared_hinge']
-        loss_selection = loss_values[loss % len(loss_values)]
-
-        C = min(1., max(0.0001, C))
-
-        return self._train_model_and_predict(input_df, PassiveAggressiveClassifier,
-            C=C, loss=loss_selection, fit_intercept=True, random_state=42)
-
-    def _logistic_regression(self, input_df, C, penalty, dual):
-        """Fits a logistic regression classifier
-
-        Parameters
-        ----------
-        input_df: pandas.DataFrame {n_samples, n_features+['class', 'group', 'guess']}
-            Input DataFrame for fitting the logistic regression classifier
-        C: float
-            Inverse of regularization strength; must be a positive value. Like in support vector machines, smaller values specify stronger regularization.
-        penalty: int
-            Integer used to specify the norm used in the penalization (l1 or l2)
-        dual: bool
-            Select the algorithm to either solve the dual or primal optimization problem.
-
-        Returns
-        -------
-        input_df: pandas.DataFrame {n_samples, n_features+['guess', 'group', 'class', 'SyntheticFeature']}
-            Returns a modified input DataFrame with the guess column updated according to the classifier's predictions.
-            Also adds the classifiers's predictions as a 'SyntheticFeature' column.
-
-        """
-        input_df = self._compile_autoencoder()
-        C = min(50., max(0.0001, C))
-
-        penalty_values = ['l1', 'l2']
-        penalty_selection = penalty_values[penalty % len(penalty_values)]
-
-        if penalty_selection == 'l1':
-            dual = False
-
-        return self._train_model_and_predict(input_df, LogisticRegression, C=C,
-            penalty=penalty_selection, dual=dual, random_state=42)
-
-    def _knnc(self, input_df, n_neighbors, weights):
-        """Fits a k-nearest neighbor classifier
-
-        Parameters
-        ----------
-        input_df: pandas.DataFrame {n_samples, n_features+['class', 'group', 'guess']}
-            Input DataFrame for fitting the k-nearest neighbor classifier
-        n_neighbors: int
-            Number of neighbors to use by default for k_neighbors queries; must be a positive value
-        weights: int
-            Selects a value from the list: ['uniform', 'distance']
-
-        Returns
-        -------
-        input_df: pandas.DataFrame {n_samples, n_features+['guess', 'group', 'class', 'SyntheticFeature']}
-            Returns a modified input DataFrame with the guess column updated according to the classifier's predictions.
-            Also adds the classifiers's predictions as a 'SyntheticFeature' column.
-
-        """
-        input_df = self._compile_autoencoder()
-        training_set_size = len(input_df.loc[input_df['group'] == 'training'])
-        n_neighbors = max(min(training_set_size - 1, n_neighbors), 2)
-
-        weights_values = ['uniform', 'distance']
-        weights_selection = weights_values[weights % len(weights_values)]
-
-        return self._train_model_and_predict(input_df, KNeighborsClassifier,
-            n_neighbors=n_neighbors, weights=weights_selection)
-
-    def _gradient_boosting(self, input_df, learning_rate, max_features, min_weight):
-        """Fits the sklearn GradientBoostingClassifier classifier
-
-        Parameters
-        ----------
-        input_df: pandas.DataFrame {n_samples, n_features+['class', 'group', 'guess']}
-            Input DataFrame for fitting the XGBoost classifier
-        learning_rate: float
-            Shrinks the contribution of each tree by learning_rate
-        max_features: float
-            Maximum number of features to use (proportion of total features)
-        min_weight_fraction_leaf: float
-            The minimum weighted fraction of the input samples required to be at a leaf node.
-
-        Returns
-        -------
-        input_df: pandas.DataFrame {n_samples, n_features+['guess', 'group', 'class', 'SyntheticFeature']}
-            Returns a modified input DataFrame with the guess column updated according to the classifier's predictions.
-            Also adds the classifiers's predictions as a 'SyntheticFeature' column.
-
-        """
-        input_df = self._compile_autoencoder()
-        learning_rate = min(1., max(learning_rate, 0.0001))
-        max_features = min(1., max(0., learning_rate))
-        min_weight = min(0.5, max(0., min_weight))
-
-        return self._train_model_and_predict(input_df, GradientBoostingClassifier,
-            learning_rate=learning_rate, n_estimators=500,
-            max_features=max_features, random_state=42, min_weight_fraction_leaf=min_weight)
-
-    def _train_model_and_predict(self, input_df, model, **kwargs):
-        """Fits an arbitrary sklearn classifier model with a set of keyword parameters
-
-        Parameters
-        ----------
-        input_df: pandas.DataFrame {n_samples, n_features+['class', 'group', 'guess']}
-            Input DataFrame for fitting the k-neares
-        model: sklearn classifier
-            Input model to fit and predict on input_df
-        kwargs: unpacked parameters
-            Input parameters to pass to the model's constructor, does not need to be a dictionary
-
-        Returns
-        -------
-        input_df: pandas.DataFrame {n_samples, n_features+['guess', 'group', 'class', 'SyntheticFeature']}
-            Returns a modified input DataFrame with the guess column updated according to the classifier's predictions.
-            Also adds the classifiers's predictions as a 'SyntheticFeature' column.
-
-        """
-        # If there are no features left (i.e., only 'class', 'group', and 'guess' remain in the DF), then there is nothing to do
-        if len(input_df.columns) == 3:
-            return input_df
-
-        input_df = input_df.copy()
-
-        training_features = input_df.loc[input_df['group'] == 'training'].drop(self.non_feature_columns, axis=1).values
-        training_classes = input_df.loc[input_df['group'] == 'training', 'class'].values
-
-        # Try to seed the random_state parameter if the model accepts it.
-        try:
-            clf = model(random_state=42, **kwargs)
-            clf.fit(training_features, training_classes)
-        except TypeError:
-            clf = model(**kwargs)
-            clf.fit(training_features, training_classes)
-
-        all_features = input_df.drop(self.non_feature_columns, axis=1).values
-        input_df.loc[:, 'guess'] = clf.predict(all_features)
-
-        # Also store the guesses as a synthetic feature
-        # sf_hash = '-'.join(sorted(input_df.columns.values))
-        sf_hash = '-'.join([str(x) for x in input_df.columns.values])
-        # Use the classifier object's class name in the synthetic feature
-        sf_hash += '{}'.format(clf.__class__)
-        sf_hash += '-'.join(kwargs)
-        sf_identifier = 'SyntheticFeature-{}'.format(hashlib.sha224(sf_hash.encode('UTF-8')).hexdigest())
-        input_df.loc[:, sf_identifier] = input_df['guess'].values
-
-        return input_df
-
     def _autoencoder(self, input_df, compression_factor, encoder_acivation,
                      decoder_activation, optimizer, activity_regularizer,
                      activity_regularizer_param1, activity_regularizer_param2):
+
+        # reset the encoder stack
+        # used to build and fit stacked autoencoders with arbitrary number of layers
+        self.encoder_stack = []
 
         if activity_regularizer == 1:
             activity_regularizer = regularizers.activity_l1(activity_regularizer_param1)
@@ -1098,20 +690,22 @@ class TPOT(object):
         test_df = input_df.loc[input_df['group'] == 'testing']
 
         autoencoder.start_encoder(train_df, test_df, len(self.non_feature_columns))
-        self.encoder_stack = []
         self.encoder_stack.append(autoencoder)
+
         return autoencoder.encoding_dim, autoencoder.code_layer, autoencoder.input
 
-    def _hidden_autoencoder(self, input_df, compression_factor, encoder_acivation,
+    def _hidden_autoencoder(self, input_tuple, compression_factor, encoder_acivation,
                      decoder_activation, optimizer, activity_regularizer,
                      activity_regularizer_param1, activity_regularizer_param2):
 
-        if type(input_df) == type(pd.DataFrame):
-            return self._autoencoder(input_df, compression_factor, encoder_acivation,
+        if type(input_tuple) == type(pd.DataFrame):
+            # Just as a precaution. In case an evolved pipeline attaches _hidden_autoencoder
+            # without first attaching an _autoencoder
+            return self._autoencoder(input_tuple, compression_factor, encoder_acivation,
                                      decoder_activation, optimizer, activity_regularizer,
                                      activity_regularizer_param1, activity_regularizer_param2)
 
-        nbr_columns, code_layer, _input = input_df
+        # nbr_columns, code_layer, _input = input_tuple
 
         if activity_regularizer == 1:
             activity_regularizer = regularizers.activity_l1(activity_regularizer_param1)
@@ -1126,15 +720,17 @@ class TPOT(object):
                                   decoder_activation=decoder_activation, optimizer=optimizer,
                                   activity_regularizer=activity_regularizer, dropout_rate=0.0)
 
-        autoencoder.stack_encoder(nbr_columns, code_layer, _input)
+        autoencoder.stack_encoder(*input_tuple)
 
         self.encoder_stack.append(autoencoder)
-        return autoencoder.encoding_dim, autoencoder.code_layer, _input
+        return input_tuple
 
     def _compile_autoencoder(self, input_df):
+
         if self._training_testing_data:
             # This runs when we are scoring the test set.
             self._training_classes_vec_train = self._training_classes_vec
+
         optimizer = self.encoder_stack[0].optimizer
         train_df = self.encoder_stack[0].train_df
         validate_df = self.encoder_stack[0].validate_df
@@ -1169,26 +765,14 @@ class TPOT(object):
         # Unsupervised pretraining
         model.compile(optimizer=optimizer, loss='binary_crossentropy')
 
-        model.fit(train_data.values, train_data.values, nb_epoch=nb_epoch, batch_size=256, verbose=1,
+        model.fit(train_data.values, train_data.values, nb_epoch=nb_epoch*2, batch_size=512, verbose=1,
                   shuffle=True, validation_data=(validate_data.values, validate_data.values))
 
         # Supervised training
         classifier.compile(optimizer=optimizer, loss='binary_crossentropy')
-        classifier.fit(train_data.values, np.array(self._training_classes_vec_train), nb_epoch=nb_epoch*5, batch_size=256*2,
+        classifier.fit(train_data.values, np.array(self._training_classes_vec_train), nb_epoch=nb_epoch*5, batch_size=512,
                        verbose=1, shuffle=True)
 
-        """
-        code_train_df = pd.DataFrame(data=encoder.predict(train_data.values))
-        code_test_df = pd.DataFrame(data=encoder.predict(validate_data.values))
-
-        code_train_df[self.non_feature_columns] = train_df[self.non_feature_columns]
-        code_test_df[self.non_feature_columns] = validate_df[self.non_feature_columns]
-
-        code_df = code_train_df.append(code_test_df)
-        code_df = code_df.reset_index(drop=True)
-
-        return code_df
-        """
         input_df = train_df.append(validate_df)
         input_df = input_df.reset_index(drop=True)
         # If there are no features left (i.e., only 'class', 'group', and 'guess' remain in the DF), then there is nothing to do
@@ -1196,9 +780,6 @@ class TPOT(object):
             return input_df
 
         input_df = input_df.copy()
-
-        # training_features = input_df.loc[input_df['group'] == 'training'].drop(self.non_feature_columns, axis=1).values
-        # training_classes = input_df.loc[input_df['group'] == 'training', 'class'].values
 
         all_features = input_df.drop(self.non_feature_columns, axis=1).values
         predictions = classifier.predict(all_features)
@@ -1218,204 +799,7 @@ class TPOT(object):
 
         return input_df
 
-    @staticmethod
-    def _combine_dfs(input_df1, input_df2):
-        """Function to combine two DataFrames
-
-        Parameters
-        ----------
-        input_df1: pandas.DataFrame {n_samples, n_features+['class', 'group', 'guess']}
-            Input DataFrame to combine
-        input_df2: pandas.DataFrame {n_samples, n_features+['class', 'group', 'guess']}
-            Input DataFrame to combine
-
-        Returns
-        -------
-        combined_df: pandas.DataFrame {n_samples, n_both_features+['guess', 'group', 'class']}
-            Returns a DataFrame containing the features of both input_df1 and input_df2
-
-        """
-        return input_df1.join(input_df2[[column for column in input_df2.columns.values if column not in input_df1.columns.values]]).copy()
-
-    def _rfe(self, input_df, num_features, step):
-        """Uses scikit-learn's Recursive Feature Elimination to learn the subset of features that have the highest weights according to the estimator
-
-        Parameters
-        ----------
-        input_df: pandas.DataFrame {n_samples, n_features+['class', 'group', 'guess']}
-            Input DataFrame to perform feature selection on
-        num_features: int
-            The number of features to select
-        step: float
-            The percentage of features to drop each iteration
-
-        Returns
-        -------
-        subsetted_df: pandas.DataFrame {n_samples, n_filtered_features + ['guess', 'group', 'class']}
-            Returns a DataFrame containing the `num_features` best features
-
-        """
-        training_features = input_df.loc[input_df['group'] == 'training'].drop(self.non_feature_columns, axis=1)
-        training_class_vals = input_df.loc[input_df['group'] == 'training', 'class'].values
-
-        step = max(min(0.99, step), 0.1)
-
-        if num_features < 1:
-            num_features = 1
-        elif num_features > len(training_features.columns):
-            num_features = len(training_features.columns)
-
-        if len(training_features.columns.values) == 0:
-            return input_df.copy()
-
-        estimator = SVC(kernel='linear')
-        selector = RFE(estimator, n_features_to_select=num_features, step=step)
-        try:
-            selector.fit(training_features, training_class_vals)
-            mask = selector.get_support(True)
-            mask_cols = list(training_features.iloc[:, mask].columns) + self.non_feature_columns
-            return input_df[mask_cols].copy()
-        except ValueError:
-            return input_df[self.non_feature_columns].copy()
-
-    def _select_percentile(self, input_df, percentile):
-        """Uses scikit-learn's SelectPercentile feature selection to learn the subset of features that belong in the highest `percentile`
-
-        Parameters
-        ----------
-        input_df: pandas.DataFrame {n_samples, n_features+['class', 'group', 'guess']}
-            Input DataFrame to perform feature selection on
-        percentile: int
-            The features that belong in the top percentile to keep from the original set of features in the training data
-
-        Returns
-        -------
-        subsetted_df: pandas.DataFrame {n_samples, n_filtered_features + ['guess', 'group', 'class']}
-            Returns a DataFrame containing the best features in the given `percentile`
-
-        """
-        training_features = input_df.loc[input_df['group'] == 'training'].drop(self.non_feature_columns, axis=1)
-        training_class_vals = input_df.loc[input_df['group'] == 'training', 'class'].values
-
-        percentile = max(min(100, percentile), 0)
-
-        if len(training_features.columns.values) == 0:
-            return input_df.copy()
-
-        with warnings.catch_warnings():
-            # Ignore warnings about constant features
-            warnings.simplefilter('ignore', category=UserWarning)
-
-            selector = SelectPercentile(f_classif, percentile=percentile)
-            selector.fit(training_features, training_class_vals)
-            mask = selector.get_support(True)
-
-        mask_cols = list(training_features.iloc[:, mask].columns) + self.non_feature_columns
-        return input_df[mask_cols].copy()
-
-    def _select_kbest(self, input_df, k):
-        """Uses scikit-learn's SelectKBest feature selection to learn the subset of features that have the highest score according to some scoring function
-
-        Parameters
-        ----------
-        input_df: pandas.DataFrame {n_samples, n_features+['class', 'group', 'guess']}
-            Input DataFrame to perform feature selection on
-        k: int
-            The top k features to keep from the original set of features in the training data
-
-        Returns
-        -------
-        subsetted_df: pandas.DataFrame {n_samples, n_filtered_features + ['guess', 'group', 'class']}
-            Returns a DataFrame containing the `k` best features
-
-        """
-        training_features = input_df.loc[input_df['group'] == 'training'].drop(self.non_feature_columns, axis=1)
-        training_class_vals = input_df.loc[input_df['group'] == 'training', 'class'].values
-
-        if k < 1:
-            k = 1
-        elif k >= len(training_features.columns):
-            k = 'all'
-
-        if len(training_features.columns.values) == 0:
-            return input_df.copy()
-
-        with warnings.catch_warnings():
-            # Ignore warnings about constant features
-            warnings.simplefilter('ignore', category=UserWarning)
-
-            selector = SelectKBest(f_classif, k=k)
-            selector.fit(training_features, training_class_vals)
-            mask = selector.get_support(True)
-
-        mask_cols = list(training_features.iloc[:, mask].columns) + self.non_feature_columns
-        return input_df[mask_cols].copy()
-
-    def _select_fwe(self, input_df, alpha):
-        """Uses scikit-learn's SelectFwe feature selection to subset the features according to p-values corresponding to family-wise error rate
-
-        Parameters
-        ----------
-        input_df: pandas.DataFrame {n_samples, n_features+['class', 'group', 'guess']}
-            Input DataFrame to perform feature selection on
-        alpha: float in the range [0.001, 0.05]
-            The highest uncorrected p-value for features to keep
-
-        Returns
-        -------
-        subsetted_df: pandas.DataFrame {n_samples, n_filtered_features + ['guess', 'group', 'class']}
-            Returns a DataFrame containing the 'best' features
-
-        """
-        training_features = input_df.loc[input_df['group'] == 'training'].drop(self.non_feature_columns, axis=1)
-        training_class_vals = input_df.loc[input_df['group'] == 'training', 'class'].values
-
-        # Clamp alpha in the range [0.001, 0.05]
-        alpha = max(min(0.05, alpha), 0.001)
-
-        if len(training_features.columns.values) == 0:
-            return input_df.copy()
-
-        with warnings.catch_warnings():
-            # Ignore warnings about constant features
-            warnings.simplefilter('ignore', category=UserWarning)
-
-            selector = SelectFwe(f_classif, alpha=alpha)
-            selector.fit(training_features, training_class_vals)
-            mask = selector.get_support(True)
-
-        mask_cols = list(training_features.iloc[:, mask].columns) + self.non_feature_columns
-        return input_df[mask_cols].copy()
-
-    def _variance_threshold(self, input_df, threshold):
-        """Uses scikit-learn's VarianceThreshold feature selection to learn the subset of features that pass the threshold
-
-        Parameters
-        ----------
-        input_df: pandas.DataFrame {n_samples, n_features+['class', 'group', 'guess']}
-            Input DataFrame to perform feature selection on
-        threshold: float
-            The variance threshold that removes features that fall under the threshold
-
-        Returns
-        -------
-        subsetted_df: pandas.DataFrame {n_samples, n_filtered_features + ['guess', 'group', 'class']}
-            Returns a DataFrame containing the features that are above the variance threshold
-
-        """
-        training_features = input_df.loc[input_df['group'] == 'training'].drop(self.non_feature_columns, axis=1)
-
-        selector = VarianceThreshold(threshold=threshold)
-        try:
-            selector.fit(training_features)
-        except ValueError:
-            # None features are above the variance threshold
-            return input_df[['guess', 'class', 'group']].copy()
-
-        mask = selector.get_support(True)
-        mask_cols = list(training_features.iloc[:, mask].columns) + self.non_feature_columns
-        return input_df[mask_cols].copy()
-
+    # @staticmethod
     def _standard_scaler(self, input_df):
         """Uses scikit-learn's StandardScaler to scale the features by removing their mean and scaling to unit variance
 
@@ -1473,46 +857,6 @@ class TPOT(object):
             input_df.loc[:, column] = scaled_features[:, col_num]
 
         return input_df.copy()
-
-    def _polynomial_features(self, input_df):
-        """Uses scikit-learn's PolynomialFeatures to construct new degree-2 polynomial features from the existing feature set
-
-        Parameters
-        ----------
-        input_df: pandas.DataFrame {n_samples, n_features+['class', 'group', 'guess']}
-            Input DataFrame to scale
-
-        Returns
-        -------
-        modified_df: pandas.DataFrame {n_samples, n_constructed_features + ['guess', 'group', 'class']}
-            Returns a DataFrame containing the constructed features
-
-        """
-        training_features = input_df.loc[input_df['group'] == 'training'].drop(self.non_feature_columns, axis=1)
-
-        if len(training_features.columns.values) == 0:
-            return input_df.copy()
-        elif len(training_features.columns.values) > 700:
-            # Too many features to produce - skip this operator
-            return input_df.copy()
-
-        # The feature constructor must be fit on only the training data
-        poly = PolynomialFeatures(degree=2, include_bias=False, interaction_only=False)
-        poly.fit(training_features.values.astype(np.float64))
-        constructed_features = poly.transform(input_df.drop(self.non_feature_columns, axis=1).values.astype(np.float64))
-
-        modified_df = pd.DataFrame(data=constructed_features)
-
-        for non_feature_column in self.non_feature_columns:
-            modified_df[non_feature_column] = input_df[non_feature_column].values
-
-        new_col_names = {}
-        for column in modified_df.columns.values:
-            if type(column) != str:
-                new_col_names[column] = str(column).zfill(10)
-        modified_df.rename(columns=new_col_names, inplace=True)
-
-        return modified_df.copy()
 
     def _min_max_scaler(self, input_df):
         """Uses scikit-learn's MinMaxScaler to transform all of the features by scaling them to the range [0, 1]
@@ -1585,315 +929,6 @@ class TPOT(object):
             if type(column) != str:
                 new_col_names[column] = str(column).zfill(10)
         modified_df.rename(columns=new_col_names, inplace=True)
-
-        return modified_df.copy()
-
-    def _binarizer(self, input_df, threshold):
-        """Uses scikit-learn's Binarizer to binarize all of the features, setting any feature >`threshold` to 1 and all others to 0
-
-        Parameters
-        ----------
-        input_df: pandas.DataFrame {n_samples, n_features+['class', 'group', 'guess']}
-            Input DataFrame to scale
-        threshold: float
-            Feature values below or equal to this value are replaced by 0, above it by 1
-
-        Returns
-        -------
-        modified_df: pandas.DataFrame {n_samples, n_features + ['guess', 'group', 'class']}
-            Returns a DataFrame containing the binarized features
-
-        """
-        training_features = input_df.loc[input_df['group'] == 'training'].drop(self.non_feature_columns, axis=1)
-
-        if len(training_features.columns.values) == 0:
-            return input_df.copy()
-
-        # The binarizer must be fit on only the training data
-        binarizer = Binarizer(copy=False, threshold=threshold)
-        binarizer.fit(training_features.values.astype(np.float64))
-        binarized_features = binarizer.transform(input_df.drop(self.non_feature_columns, axis=1).values.astype(np.float64))
-
-        modified_df = pd.DataFrame(data=binarized_features)
-
-        for non_feature_column in self.non_feature_columns:
-            modified_df[non_feature_column] = input_df[non_feature_column].values
-
-        new_col_names = {}
-        for column in modified_df.columns.values:
-            if type(column) != str:
-                new_col_names[column] = str(column).zfill(10)
-        modified_df.rename(columns=new_col_names, inplace=True)
-
-        return modified_df.copy()
-
-    def _pca(self, input_df, iterated_power):
-        """Uses scikit-learn's RandomizedPCA to transform the feature set
-
-        Parameters
-        ----------
-        input_df: pandas.DataFrame {n_samples, n_features+['class', 'group', 'guess']}
-            Input DataFrame to scale
-        iterated_power: int
-            Number of iterations for the power method. [1, 10]
-
-        Returns
-        -------
-        modified_df: pandas.DataFrame {n_samples, n_components + ['guess', 'group', 'class']}
-            Returns a DataFrame containing the transformed features
-
-        """
-        training_features = input_df.loc[input_df['group'] == 'training'].drop(self.non_feature_columns, axis=1)
-
-        if len(training_features.columns.values) == 0:
-            return input_df.copy()
-
-        # Thresholding iterated_power [1, 10]
-        iterated_power = min(10, max(1, iterated_power))
-
-        # PCA must be fit on only the training data
-        pca = RandomizedPCA(iterated_power=iterated_power, copy=False)
-        pca.fit(training_features.values.astype(np.float64))
-        transformed_features = pca.transform(input_df.drop(self.non_feature_columns, axis=1).values.astype(np.float64))
-
-        modified_df = pd.DataFrame(data=transformed_features)
-
-        for non_feature_column in self.non_feature_columns:
-            modified_df[non_feature_column] = input_df[non_feature_column].values
-
-        new_col_names = {}
-        for column in modified_df.columns.values:
-            if type(column) != str:
-                new_col_names[column] = str(column).zfill(10)
-        modified_df.rename(columns=new_col_names, inplace=True)
-
-        return modified_df.copy()
-
-    def _rbf(self, input_df, gamma):
-        """Uses scikit-learn's RBFSampler to transform the feature set
-
-        Parameters
-        ----------
-        input_df: pandas.DataFrame {n_samples, n_features+['class', 'group', 'guess']}
-            Input DataFrame to scale
-        gamma: float
-            Parameter of RBF kernel: exp(-gamma * x^2)
-
-        Returns
-        -------
-        modified_df: pandas.DataFrame {n_samples, n_components + ['guess', 'group', 'class']}
-            Returns a DataFrame containing the transformed features
-
-        """
-        training_features = input_df.loc[input_df['group'] == 'training'].drop(self.non_feature_columns, axis=1)
-
-        if len(training_features.columns.values) == 0:
-            return input_df.copy()
-
-        # RBF must be fit on only the training data
-        rbf = RBFSampler(gamma=gamma)
-        rbf.fit(training_features.values.astype(np.float64))
-        transformed_features = rbf.transform(input_df.drop(self.non_feature_columns, axis=1).values.astype(np.float64))
-
-        modified_df = pd.DataFrame(data=transformed_features)
-
-        for non_feature_column in self.non_feature_columns:
-            modified_df[non_feature_column] = input_df[non_feature_column].values
-
-        new_col_names = {}
-        for column in modified_df.columns.values:
-            if type(column) != str:
-                new_col_names[column] = str(column).zfill(10)
-        modified_df.rename(columns=new_col_names, inplace=True)
-
-        return modified_df.copy()
-
-    def _fast_ica(self, input_df, tol):
-        """Uses scikit-learn's FastICA to transform the feature set
-
-        Parameters
-        ----------
-        input_df: pandas.DataFrame {n_samples, n_features+['class', 'group', 'guess']}
-            Input DataFrame to scale
-        tol: float
-            Tolerance on update at each iteration.
-
-        Returns
-        -------
-        modified_df: pandas.DataFrame {n_samples, n_components + ['guess', 'group', 'class']}
-            Returns a DataFrame containing the transformed features
-
-        """
-        training_features = input_df.loc[input_df['group'] == 'training'].drop(self.non_feature_columns, axis=1)
-
-        if len(training_features.columns.values) == 0:
-            return input_df.copy()
-
-        # Ensure that tol does not get to be too small
-        tol = max(tol, 0.0001)
-
-        ica = FastICA(tol=tol, random_state=42)
-
-        # Ignore convergence warnings during GP
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore', category=UserWarning)
-
-            ica.fit(training_features.values.astype(np.float64))
-
-        transformed_features = ica.transform(input_df.drop(self.non_feature_columns, axis=1).values.astype(np.float64))
-        modified_df = pd.DataFrame(data=transformed_features)
-
-        for non_feature_column in self.non_feature_columns:
-            modified_df[non_feature_column] = input_df[non_feature_column].values
-
-        new_col_names = {}
-        for column in modified_df.columns.values:
-            if type(column) != str:
-                new_col_names[column] = str(column).zfill(10)
-        modified_df.rename(columns=new_col_names, inplace=True)
-
-        return modified_df.copy()
-
-    def _feat_agg(self, input_df, n_clusters, affinity, linkage):
-        """Uses scikit-learn's FeatureAgglomeration to transform the feature set
-
-        Parameters
-        ----------
-        input_df: pandas.DataFrame {n_samples, n_features+['class', 'group', 'guess']}
-            Input DataFrame to scale
-        n_clusters: int
-            The number of clusters to find.
-        affinity: int
-            Metric used to compute the linkage. Can be "euclidean", "l1", "l2",
-            "manhattan", "cosine", or "precomputed". If linkage is "ward", only
-            "euclidean" is accepted.
-            Input integer is used to select one of the above strings.
-        linkage: int
-            Can be one of the following values:
-                "ward", "complete", "average"
-            Input integer is used to select one of the above strings.
-
-        Returns
-        -------
-        modified_df: pandas.DataFrame {n_samples, n_clusters + ['guess', 'group', 'class']}
-            Returns a DataFrame containing the transformed features
-        """
-        training_features = input_df.loc[input_df['group'] == 'training'].drop(self.non_feature_columns, axis=1)
-
-        if len(training_features.columns.values) == 0:
-            return input_df.copy()
-
-        if n_clusters < 1:
-            n_clusters = 1
-
-        affinity_types = ['euclidean', 'l1', 'l2', 'manhattan', 'cosine', 'precomputed']
-        linkage_types = ['ward', 'complete', 'average']
-
-        linkage_name = linkage_types[linkage % len(linkage_types)]
-
-        if linkage_name == 'ward':
-            affinity_name = 'euclidean'
-        else:
-            affinity_name = affinity_types[affinity % len(affinity_types)]
-
-        fa = FeatureAgglomeration(n_clusters=n_clusters, affinity=affinity_name, linkage=linkage_name)
-        fa.fit(training_features.values.astype(np.float64))
-
-        clustered_features = fa.transform(input_df.drop(self.non_feature_columns, axis=1).values.astype(np.float64))
-
-        modified_df = pd.DataFrame(data=clustered_features)
-
-        for non_feature_column in self.non_feature_columns:
-            modified_df[non_feature_column] = input_df[non_feature_column].values
-
-        new_col_names = {}
-        for column in modified_df.columns.values:
-            if type(column) != str:
-                new_col_names[column] = str(column).zfill(10)
-        modified_df.rename(columns=new_col_names, inplace=True)
-
-        return modified_df.copy()
-
-    def _nystroem(self, input_df, kernel, gamma, n_components):
-        """
-        Uses scikit-learn's Nystroem to approximate a kernel map using a subset
-        of the training data. Constructs an approximate feature map for an
-        arbitrary kernel using a subset of the data as basis.
-
-        Parameters
-        ----------
-        input_df: pandas.DataFrame {n_samples, n_features+['class', 'group', 'guess']}
-            Input DataFrame to scale
-        kernel: int
-            Kernel type is selected from scikit-learn's provided types:
-                'sigmoid', 'polynomial', 'additive_chi2', 'poly', 'laplacian', 'cosine', 'linear', 'rbf', 'chi2'
-
-            Input integer is used to select one of the above strings.
-        gamma: float
-            Gamma parameter for the kernels.
-        n_components: int
-            The number of components to keep
-
-        Returns
-        -------
-        modified_df: pandas.DataFrame {n_samples, n_components + ['guess', 'group', 'class']}
-            Returns a DataFrame containing the transformed features
-
-        """
-        training_features = input_df.loc[input_df['group'] == 'training'].drop(self.non_feature_columns, axis=1)
-
-        if len(training_features.columns.values) == 0:
-            return input_df.copy()
-
-        if n_components < 1:
-            n_components = 1
-        else:
-            n_components = min(n_components, len(training_features.columns.values), len(training_features))
-
-        # Pulled from sklearn.metrics.pairwise.PAIRWISE_KERNEL_FUNCTIONS
-        kernel_types = ['rbf', 'cosine', 'chi2', 'laplacian', 'polynomial', 'poly', 'linear', 'additive_chi2', 'sigmoid']
-        kernel_name = kernel_types[kernel % len(kernel_types)]
-
-        nys = Nystroem(kernel=kernel_name, gamma=gamma, n_components=n_components)
-        nys.fit(training_features.values.astype(np.float64))
-        transformed_features = nys.transform(input_df.drop(self.non_feature_columns, axis=1).values.astype(np.float64))
-
-        modified_df = pd.DataFrame(data=transformed_features)
-
-        for non_feature_column in self.non_feature_columns:
-            modified_df[non_feature_column] = input_df[non_feature_column].values
-
-        new_col_names = {}
-        for column in modified_df.columns.values:
-            if type(column) != str:
-                new_col_names[column] = str(column).zfill(10)
-        modified_df.rename(columns=new_col_names, inplace=True)
-
-        return modified_df.copy()
-
-    def _zero_count(self, input_df):
-        """Adds virtual features for the number of zeros per row, and number of non-zeros per row.
-
-        Parameters
-        ----------
-        input_df: pandas.DataFrame {n_samples, n_features+['class', 'group', 'guess']}
-            Input DataFrame to scale
-
-        Returns
-        -------
-        modified_df: pandas.DataFrame {n_samples, n_features+['class', 'group', 'guess']}
-            Returns a DataFrame containing the new virtual features
-
-        """
-        feature_cols_only = input_df.drop(self.non_feature_columns, axis=1)
-        num_features = len(feature_cols_only.columns.values)
-
-        if num_features == 0:
-            return input_df.copy()
-
-        modified_df = input_df.copy()
-        modified_df['non_zero'] = feature_cols_only.apply(lambda row: np.count_nonzero(row), axis=1).astype(np.float64)
-        modified_df['zero_col'] = feature_cols_only.apply(lambda row: (num_features - np.count_nonzero(row)), axis=1).astype(np.float64)
 
         return modified_df.copy()
 
