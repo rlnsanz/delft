@@ -128,12 +128,73 @@ def load_notMNIST_Vector():
 
 
 def load_MNIST():
-    global X_train, X_test, y_train, y_test
-    digits = load_digits()
-    X_train, X_test, y_train, y_test = train_test_split(digits.data, digits.target, train_size=0.75, test_size=0.25)
+    global X_train, X_test, y_train, y_test, y_train_vec
+    # digits = load_digits()
+    # X_train, X_test, y_train, y_test = train_test_split(digits.data, digits.target, train_size=0.75, test_size=0.25)
+    train_data_filename = "../data/mnist.train"
+    test_data_filename = "../data/mnist.test"
+
+    train_dataset = np.loadtxt(train_data_filename, np.int32)
+    y_train = train_dataset[:, 0]
+    nbr_classes = max(y_train) + 1
+    y_train_vec = (np.arange(nbr_classes) == y_train[:, None]).astype(np.float32)
+    X_train = train_dataset[:, 1:]
+
+    test_dataset = np.loadtxt(test_data_filename, np.int32)
+    y_test = test_dataset[:, 0]
+    X_test = test_dataset[:, 1:]
+
+def load_CIFAR10():
+    global X_train, X_test, y_train, y_test, y_train_vec
+    train_data_filename = "../data/cifar-10-training.csv"
+    test_data_filename = "../data/cifar-10-testing.csv"
+
+
+    train_dataset = np.loadtxt(train_data_filename, np.int32, delimiter=',')
+    y_train = train_dataset[:, 0]
+    nbr_classes = max(y_train) + 1
+    y_train_vec = (np.arange(nbr_classes) == y_train[:, None]).astype(np.float32)
+    X_train = train_dataset[:, 1:]
+
+    test_dataset = np.loadtxt(test_data_filename, np.int32, delimiter=',')
+    y_test = test_dataset[:, 0]
+    X_test = test_dataset[:, 1:]
+
+def load_CIFAR100_Coarse():
+    global X_train, X_test, y_train, y_test, y_train_vec
+    data_filename = "../data/cifar-100-coarse.csv"
+
+    dataset = np.loadtxt(data_filename, np.int32, delimiter=',')
+
+    test_dataset = dataset[1:10001]
+    train_dataset = dataset[10001:]
+
+    y_train = train_dataset[:, 0]
+    nbr_classes = max(y_train) + 1
+    y_train_vec = (np.arange(nbr_classes) == y_train[:, None]).astype(np.float32)
+    X_train = train_dataset[:, 1:]
+    y_test = test_dataset[:, 0]
+    X_test = test_dataset[:, 1:]
+
+def load_CIFAR100_Fine():
+    global X_train, X_test, y_train, y_test, y_train_vec
+    data_filename = "../data/cifar-100-fine.csv"
+
+    dataset = np.loadtxt(data_filename, np.int32, delimiter=',')
+
+    test_dataset = dataset[1:10001]
+    train_dataset = dataset[10001:]
+
+    y_train = train_dataset[:, 0]
+    nbr_classes = max(y_train) + 1
+    y_train_vec = (np.arange(nbr_classes) == y_train[:, None]).astype(np.float32)
+    X_train = train_dataset[:, 1:]
+    y_test = test_dataset[:, 0]
+    X_test = test_dataset[:, 1:]
+
 
 def load_ChaLearn(prefix):
-    global X_train, X_test, y_train, y_test
+    global X_train, X_test, y_train, y_test, y_train_vec
     imputer = Imputer(strategy="median")
     data_filename = prefix + ".data"
     solution_filename = prefix + ".solution"
@@ -146,6 +207,7 @@ def load_ChaLearn(prefix):
     X_train, y_train = subsample(X_train, y_train, rate=0.1)
     try:
         columns = y_train.shape[1]
+        y_train_vec = y_train
         y_train = np.argmax(y_train, 1)
         y_test = np.argmax(y_test, 1)
     except IndexError:
@@ -176,8 +238,12 @@ def main():
         load_MNIST()
     elif options.dataset == "not_mnist":
         load_notMNIST()
-    elif options.dataset == "not_mnist_vector":
-        load_notMNIST_Vector()
+    elif options.dataset == "cifar10":
+        load_CIFAR10()
+    elif options.dataset == "cifar100coarse":
+        load_CIFAR100_Coarse()
+    elif options.dataset == "cifar100fine":
+        load_CIFAR100_Fine()
     elif options.dataset == "albert":
         load_ALBERT()
     elif options.dataset == "dilbert":
