@@ -12,6 +12,12 @@ from sklearn.preprocessing import Imputer
 
 import sys
 
+X_train = None
+X_test = None
+y_train = None
+y_test = None
+y_train_vec = None
+
 def subsample(X_train, y_train, rate):
     indices = [i for i in range(X_train.shape[0])]
     indices = np.random.permutation(indices)
@@ -137,8 +143,9 @@ def load_MNIST():
     train_dataset = np.loadtxt(train_data_filename, np.int32)
     y_train = train_dataset[:, 0]
     nbr_classes = max(y_train) + 1
-    y_train_vec = (np.arange(nbr_classes) == y_train[:, None]).astype(np.float32)
     X_train = train_dataset[:, 1:]
+    X_train, y_train = subsample(X_train, y_train, 0.1)
+    y_train_vec = (np.arange(nbr_classes) == y_train[:, None]).astype(np.float32)
 
     test_dataset = np.loadtxt(test_data_filename, np.int32)
     y_test = test_dataset[:, 0]
@@ -149,12 +156,12 @@ def load_CIFAR10():
     train_data_filename = "../data/cifar-10-training.csv"
     test_data_filename = "../data/cifar-10-testing.csv"
 
-
     train_dataset = np.loadtxt(train_data_filename, np.int32, delimiter=',')
     y_train = train_dataset[:, 0]
     nbr_classes = max(y_train) + 1
-    y_train_vec = (np.arange(nbr_classes) == y_train[:, None]).astype(np.float32)
     X_train = train_dataset[:, 1:]
+    X_train, y_train = subsample(X_train, y_train, 0.1)
+    y_train_vec = (np.arange(nbr_classes) == y_train[:, None]).astype(np.float32)
 
     test_dataset = np.loadtxt(test_data_filename, np.int32, delimiter=',')
     y_test = test_dataset[:, 0]
@@ -164,15 +171,17 @@ def load_CIFAR100_Coarse():
     global X_train, X_test, y_train, y_test, y_train_vec
     data_filename = "../data/cifar-100-coarse.csv"
 
-    dataset = np.loadtxt(data_filename, np.int32, delimiter=',')
+    dataset = np.loadtxt(data_filename, np.int32, delimiter='\t')
 
     test_dataset = dataset[1:10001]
     train_dataset = dataset[10001:]
 
     y_train = train_dataset[:, 0]
     nbr_classes = max(y_train) + 1
-    y_train_vec = (np.arange(nbr_classes) == y_train[:, None]).astype(np.float32)
     X_train = train_dataset[:, 1:]
+    X_train, y_train = subsample(X_train, y_train, 0.1)
+    y_train_vec = (np.arange(nbr_classes) == y_train[:, None]).astype(np.float32)
+
     y_test = test_dataset[:, 0]
     X_test = test_dataset[:, 1:]
 
@@ -180,17 +189,20 @@ def load_CIFAR100_Fine():
     global X_train, X_test, y_train, y_test, y_train_vec
     data_filename = "../data/cifar-100-fine.csv"
 
-    dataset = np.loadtxt(data_filename, np.int32, delimiter=',')
+    dataset = np.loadtxt(data_filename, np.int32, delimiter='\t')
 
     test_dataset = dataset[1:10001]
     train_dataset = dataset[10001:]
 
     y_train = train_dataset[:, 0]
     nbr_classes = max(y_train) + 1
-    y_train_vec = (np.arange(nbr_classes) == y_train[:, None]).astype(np.float32)
     X_train = train_dataset[:, 1:]
+    X_train, y_train = subsample(X_train, y_train, 0.1)
+    y_train_vec = (np.arange(nbr_classes) == y_train[:, None]).astype(np.float32)
+
     y_test = test_dataset[:, 0]
     X_test = test_dataset[:, 1:]
+
 
 
 def load_ChaLearn(prefix):
@@ -255,7 +267,7 @@ def main():
     elif options.dataset == "volkert":
         load_VOLKERT()
 
-    tpot = TPOT(generations=5, population_size=5, verbosity=2, mutation_rate=0.9, crossover_rate=0.05)
+    tpot = TPOT(generations=1, population_size=5, verbosity=2, mutation_rate=0.9, crossover_rate=0.05)
     tpot.set_training_classes_vectorized(y_train_vec)
     tpot.fit(X_train, y_train)
     print(tpot.score(X_test, y_test))

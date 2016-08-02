@@ -36,7 +36,7 @@ from keras import regularizers
 from keras.layers import Input, LSTM, RepeatVector, Dense
 from keras.models import Model
 
-from sklearn.preprocessing import StandardScaler, RobustScaler, MaxAbsScaler, MinMaxScaler
+from sklearn.preprocessing import Imputer, StandardScaler, RobustScaler, MaxAbsScaler, MinMaxScaler
 from sklearn.cross_validation import train_test_split
 
 import warnings
@@ -67,17 +67,21 @@ class Classified_DF(Encoded_DF): pass
 
 class Dropout_Rate(object): pass
 
+class Imputed_DF(object): pass
+
 class Optimizer(object): pass
 
 class Output_DF(object): pass
 
 class Scaled_DF(object): pass
 
+class Strategy(object): pass
+
 class Autoencoder(object):
 
     def __init__(self, compression_factor,
                  encoder_activation, decoder_activation,
-                 optimizer, activity_regularizer, dropout_rate, nb_epoch=50):
+                 optimizer, activity_regularizer, dropout_rate, non_feature_columns, nb_epoch=50):
         """
         Initializes one layer of an artificial neural network
 
@@ -109,8 +113,9 @@ class Autoencoder(object):
         self.optimizer = optimizer
         self.activity_regularizer = activity_regularizer
         self.dropout_rate = dropout_rate
+        self.non_feature_columns = non_feature_columns
 
-    def start_encoder(self, train_df, validate_df, excess_columns):
+    def start_encoder(self, train_df, validate_df):
         """
         Creates the first hidden layer in a stacked autoencoder or neural network, and connects it to the input
         layer. This method also instantiates the Input class from Keras, and must be called before calling
@@ -135,7 +140,13 @@ class Autoencoder(object):
         try:
             self.train_df = train_df
             self.validate_df = validate_df
-            nbr_columns = train_df.shape[1] - excess_columns
+            nbr_columns = train_df.shape[1] - len(self.non_feature_columns)
+
+            self.train_df_noisy = train_df.copy(deep=True).drop(self.non_feature_columns, axis=1).astype(np.float64)
+            self.__dropout__(self.train_df_noisy, ceil(nbr_columns*self.dropout_rate))
+            self.validate_df_noisy = validate_df.copy(deep=True).drop(self.non_feature_columns, axis=1).astype(np.float64)
+            self.__dropout__(self.validate_df_noisy, ceil(nbr_columns*self.dropout_rate))
+
             self.nbr_columns = nbr_columns
             _input = Input(shape=(nbr_columns,))
             self.input = _input
@@ -301,25 +312,25 @@ class TPOT(object):
 
         # Neural Network operators
         self._pset.addPrimitive(self._autoencoder, [Scaled_DF, Compression_Factor, Activation,
-                                                    Activation, Optimizer, Activity_Regularizer,
+                                                    Activation, Optimizer, Dropout_Rate, Activity_Regularizer,
                                                     Activity_Regularization_Parameter,
                                                     Activity_Regularization_Parameter], Classified_DF)
 
         self._pset.addPrimitive(self._hidden_autoencoder, [Encoded_DF, Compression_Factor, Activation,
-                                                    Activation, Optimizer, Activity_Regularizer,
+                                                    Activation, Optimizer, Dropout_Rate, Activity_Regularizer,
                                                     Activity_Regularization_Parameter,
                                                     Activity_Regularization_Parameter], Encoded_DF)
 
         self._pset.addPrimitive(self._compile_autoencoder, [Encoded_DF], Output_DF)
 
         # Feature preprocessing operators
-        self._pset.addPrimitive(self._standard_scaler, [pd.DataFrame], Scaled_DF)
-        self._pset.addPrimitive(self._robust_scaler, [pd.DataFrame], Scaled_DF)
-        self._pset.addPrimitive(self._min_max_scaler, [pd.DataFrame], Scaled_DF)
-        self._pset.addPrimitive(self._max_abs_scaler, [pd.DataFrame], Scaled_DF)
+        self._pset.addPrimitive(self._standard_scaler, [Imputed_DF], Scaled_DF)
+        self._pset.addPrimitive(self._robust_scaler, [Imputed_DF], Scaled_DF)
+        self._pset.addPrimitive(self._min_max_scaler, [Imputed_DF], Scaled_DF)
+        self._pset.addPrimitive(self._max_abs_scaler, [Imputed_DF], Scaled_DF)
 
         # Imputer operators
-
+        self._pset.addPrimitive(self._imputer, [pd.DataFrame, Strategy], Imputed_DF)
         # Terminals
         int_terminals = np.concatenate((np.arange(0, 51, 1),
                 np.arange(60, 110, 10)))
@@ -365,9 +376,18 @@ class TPOT(object):
         self._pset.addTerminal(2, Activity_Regularizer)
         self._pset.addTerminal(3, Activity_Regularizer)
 
+        self._pset.addTerminal("mean", Strategy)
+        self._pset.addTerminal("median", Strategy)
+        self._pset.addTerminal("most_frequent", Strategy)
+
         for val in np.concatenate(([1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1], np.linspace(0., 1., 101))):
             self._pset.addTerminal(val, Activity_Regularization_Parameter)
-            #self._pset.addTerminal(val, Dropout_Rate)
+
+        for val in np.linspace(0., 1., 101):
+            self._pset.addTerminal(val, Dropout_Rate)
+
+        for i in range(75):
+            self._pset.addTerminal(0.0, Dropout_Rate)
 
         # Dummies for DEAP mutation, never produce a better pipeline, necessary to avoid execution halting exception
         self._pset.addTerminal([0,0], Classified_DF )
@@ -632,7 +652,8 @@ class TPOT(object):
             if type(column) != str:
                 new_col_names[column] = str(column).zfill(10)
         training_testing_data.rename(columns=new_col_names, inplace=True)
-
+        for pipeline in self.hof:
+            print("Paretto Front: {}".format(pipeline))
         return self._evaluate_individual(self._optimized_pipeline, training_testing_data)[1]
 
     def get_params(self, deep=None):
@@ -685,8 +706,21 @@ class TPOT(object):
         with open(output_file_name, 'w') as output_file:
             output_file.write(pipeline_text)
 
+    def _imputer(self, input_df, strategy):
+        # http://stackoverflow.com/questions/6736590/fast-check-for-nan-in-numpy
+        input_data = input_df.drop(self.non_feature_columns, axis=1).values
+        if np.isnan(np.sum(input_data)):
+            imputer = Imputer(strategy=strategy)
+            imputer.fit(input_data)
+            input_data = imputer.transform(input_data)
+            input_df_imputed = pd.DataFrame(data=input_data)
+            input_df_imputed[self.non_feature_columns] = input_df[self.non_feature_columns]
+            return input_df_imputed
+        else:
+            return input_df
+
     def _autoencoder(self, input_df, compression_factor, encoder_acivation,
-                     decoder_activation, optimizer, activity_regularizer,
+                     decoder_activation, optimizer, dropout_rate, activity_regularizer,
                      activity_regularizer_param1, activity_regularizer_param2):
         """
         First layer of an artificial neural network
@@ -705,6 +739,8 @@ class TPOT(object):
         optimizer: Optimizer
             The optimization method to control the gradient steps of the algorithm.
             Only the optimizer in the first layer is used.
+        dropout_rate: 0 <= float <= 1
+            Percentage of the input values of this layer that will be set to zero.
         activity_regularizer: Activity_Regularizer
             The activity regularizer to help the algorithm find simpler models and generalize better.
         activity_regularizer_param1: Activity_Regularization_Parameter
@@ -737,18 +773,19 @@ class TPOT(object):
 
         autoencoder = Autoencoder(compression_factor=compression_factor, encoder_activation=encoder_acivation,
                             decoder_activation=decoder_activation, optimizer=optimizer,
-                            activity_regularizer=activity_regularizer, dropout_rate=0.0)
+                            activity_regularizer=activity_regularizer, dropout_rate=dropout_rate,
+                                  non_feature_columns=self.non_feature_columns)
 
         train_df = input_df.loc[input_df['group'] == 'training']
         test_df = input_df.loc[input_df['group'] == 'testing']
 
-        autoencoder.start_encoder(train_df, test_df, len(self.non_feature_columns))
+        autoencoder.start_encoder(train_df, test_df)
         self.encoder_stack.append(autoencoder)
 
         return autoencoder.encoding_dim, autoencoder.code_layer, autoencoder.input
 
     def _hidden_autoencoder(self, input_tuple, compression_factor, encoder_acivation,
-                     decoder_activation, optimizer, activity_regularizer,
+                     decoder_activation, optimizer, dropout_rate, activity_regularizer,
                      activity_regularizer_param1, activity_regularizer_param2):
         """
         Any hidden layer, except the first hidden layer, of an artificial neural network.
@@ -768,6 +805,8 @@ class TPOT(object):
         optimizer: Optimizer
             The optimization method to control the gradient steps of the algorithm.
             Only the optimizer in the first layer is used.
+        dropout_rate: 0 <= float <= 1
+            Percentage of the input values of this layer that will be set to zero.
         activity_regularizer: Activity_Regularizer
             The activity regularizer to help the algorithm find simpler models and generalize better.
         activity_regularizer_param1: Activity_Regularization_Parameter
@@ -790,7 +829,7 @@ class TPOT(object):
             # Just as a precaution. In case an evolved pipeline attaches _hidden_autoencoder
             # without first attaching an _autoencoder
             return self._autoencoder(input_tuple, compression_factor, encoder_acivation,
-                                     decoder_activation, optimizer, activity_regularizer,
+                                     decoder_activation, optimizer, dropout_rate, activity_regularizer,
                                      activity_regularizer_param1, activity_regularizer_param2)
 
         # nbr_columns, code_layer, _input = input_tuple
@@ -806,7 +845,8 @@ class TPOT(object):
 
         autoencoder = Autoencoder(compression_factor=compression_factor, encoder_activation=encoder_acivation,
                                   decoder_activation=decoder_activation, optimizer=optimizer,
-                                  activity_regularizer=activity_regularizer, dropout_rate=0.0)
+                                  activity_regularizer=activity_regularizer, dropout_rate=dropout_rate,
+                                  non_feature_columns=self.non_feature_columns)
 
         autoencoder.stack_encoder(*input_tuple)
 
@@ -836,7 +876,9 @@ class TPOT(object):
 
         optimizer = self.encoder_stack[0].optimizer
         train_df = self.encoder_stack[0].train_df
+        train_data_noisy = self.encoder_stack[0].train_df_noisy
         validate_df = self.encoder_stack[0].validate_df
+        validate_data_noisy = self.encoder_stack[0].validate_df_noisy
         nb_epoch = self.encoder_stack[0].nb_epoch * len(self.encoder_stack)
 
         self.encoder_stack.reverse()
@@ -872,8 +914,8 @@ class TPOT(object):
         # Unsupervised pre-training
         model.compile(optimizer=optimizer, loss='binary_crossentropy')
 
-        model.fit(train_data.values, train_data.values, nb_epoch=nb_epoch, batch_size=256, verbose=1,
-                  shuffle=True, validation_data=(validate_data.values, validate_data.values))
+        model.fit(train_data_noisy.values, train_data.values, nb_epoch=nb_epoch, batch_size=256, verbose=1,
+                  shuffle=True, validation_data=(validate_data_noisy.values, validate_data.values))
 
         # Supervised training
         classifier.compile(optimizer=optimizer, loss='binary_crossentropy')
@@ -1195,7 +1237,7 @@ class TPOT(object):
             or when it is randomly determined that a a node should be a terminal.
             """
             # Plus 10 height to enable deep pipelines
-            return type_ not in [Encoded_DF, Output_DF, Scaled_DF] or depth == height
+            return type_ not in [Encoded_DF, Output_DF, Scaled_DF, Imputed_DF] or depth == height
 
         return self._generate(pset, min_, max_, condition, type_)
 
