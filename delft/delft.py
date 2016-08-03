@@ -349,7 +349,7 @@ class TPOT(object):
         for val in np.linspace(0.1, 10, 100):
             self._pset.addTerminal(val, Compression_Factor)
             if val <= 1:
-                for i in range(10):
+                for i in range(20):
                     self._pset.addTerminal(val, Compression_Factor)
 
         self._pset.addTerminal(True, Bool)
@@ -383,10 +383,10 @@ class TPOT(object):
         for val in np.concatenate(([1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1], np.linspace(0., 1., 101))):
             self._pset.addTerminal(val, Activity_Regularization_Parameter)
 
-        for val in np.linspace(0., 1., 101):
+        for val in np.linspace(0., .65, 101):
             self._pset.addTerminal(val, Dropout_Rate)
 
-        for i in range(75):
+        for i in range(15):
             self._pset.addTerminal(0.0, Dropout_Rate)
 
         # Dummies for DEAP mutation, never produce a better pipeline, necessary to avoid execution halting exception
