@@ -59,6 +59,8 @@ class Activity_Regularization_Parameter(object): pass
 
 class Bool(object): pass
 
+class Expansion_Factor(object): pass
+
 class Compression_Factor(object): pass
 
 class Encoded_DF(object): pass
@@ -311,7 +313,7 @@ class TPOT(object):
         self._pset.renameArguments(ARG0='input_df')
 
         # Neural Network operators
-        self._pset.addPrimitive(self._autoencoder, [Scaled_DF, Compression_Factor, Activation,
+        self._pset.addPrimitive(self._autoencoder, [Scaled_DF, Expansion_Factor, Activation,
                                                     Activation, Optimizer, Dropout_Rate, Activity_Regularizer,
                                                     Activity_Regularization_Parameter,
                                                     Activity_Regularization_Parameter], Classified_DF)
@@ -348,9 +350,10 @@ class TPOT(object):
 
         for val in np.linspace(0.1, 10, 100):
             self._pset.addTerminal(val, Compression_Factor)
-            if val <= 1:
-                for i in range(20):
-                    self._pset.addTerminal(val, Compression_Factor)
+            self._pset.addTerminal(val, Expansion_Factor)
+            if val >= 0.33 and val <= 1:
+                for i in range(12):
+                    self._pset.addTerminal(val, Expansion_Factor)
 
         self._pset.addTerminal(True, Bool)
         self._pset.addTerminal(False, Bool)
