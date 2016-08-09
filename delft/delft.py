@@ -392,9 +392,10 @@ class TPOT(object):
         for i in range(15):
             self._pset.addTerminal(0.0, Dropout_Rate)
 
-        # Dummies for DEAP mutation, never produce a better pipeline, necessary to avoid execution halting exception
+        # Dummies for DEAP mutation, never produce a better pipeline, necessary to avoid halting exception
         self._pset.addTerminal([0,0], Classified_DF )
         self._pset.addTerminal([0,0], Scaled_DF)
+        self._pset.addTerminal([0, 0], Imputed_DF)
 
         creator.create('FitnessMulti', base.Fitness, weights=(-1.0, 1.0))
         creator.create('Individual', gp.PrimitiveTree, fitness=creator.FitnessMulti)
